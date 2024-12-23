@@ -9,6 +9,13 @@ import requests
 from io import StringIO
 import pandas as pd
 from django.http import HttpResponse
+import google.generativeai as genai
+
+
+# Configure Google Gemini API
+genai.configure(api_key="AIzaSyCWf0aLUCsFx2ec8sW6sWh5MhhzkfOlf1w")
+model = genai.GenerativeModel('gemini-1.5-flash')
+
 
 @csrf_exempt
 def fetch_thingspeak_data(request):
@@ -53,7 +60,34 @@ def fetch_thingspeak_data(request):
     
     return JsonResponse({'error': 'Invalid request method'}, status=405)
 
+@csrf_exempt  # Disable CSRF for simplicity (use csrf_token in production)
+def ask_gemini(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+    try:
+        body = json.loads(request.body)
+        context = body.get('context', '')
+        question = body.get('question', '')
         
+        if not question:
+            return JsonResponse({'error': 'Question cannot be empty'}, status=400)
+        
+        # Formulate prompt for Gemini
+        prompt_text = f"Based on the following context, answer the question:\nContext: {context}\nQuestion: {question}"
+        response = model.generate_content(prompt_text)
+        
+        # Extract the answer from the response
+        answer = response.text if hasattr(response, 'text') else response.generated_text
+        
+        return JsonResponse({'answer': answer.strip()})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON format'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
         
 # class ThingSpeakCSVView(APIView):
     # def get(self, request, *args, **kwargs):
